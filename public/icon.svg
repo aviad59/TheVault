@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f5d97a"/>
+      <stop offset="55%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="#7c5e15"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f5d97a" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#f5d97a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="#0a0a0a"/>
+  <circle cx="256" cy="256" r="220" fill="url(#glow)"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#g)" stroke-width="8"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="url(#g)" stroke-width="5" opacity="0.7"/>
+  <circle cx="256" cy="256" r="100" fill="none" stroke="url(#g)" stroke-width="3" opacity="0.45"/>
+  <circle cx="256" cy="256" r="18" fill="url(#g)"/>
+  <g stroke="url(#g)" stroke-width="6" stroke-linecap="round">
+    <line x1="256" y1="40" x2="256" y2="76"/>
+    <line x1="256" y1="436" x2="256" y2="472"/>
+    <line x1="40" y1="256" x2="76" y2="256"/>
+    <line x1="436" y1="256" x2="472" y2="256"/>
+  </g>
+  <g stroke="url(#g)" stroke-width="4" stroke-linecap="round" opacity="0.85">
+    <line x1="103" y1="103" x2="129" y2="129"/>
+    <line x1="409" y1="103" x2="383" y2="129"/>
+    <line x1="103" y1="409" x2="129" y2="383"/>
+    <line x1="409" y1="409" x2="383" y2="383"/>
+  </g>
+  <g transform="translate(256 256)">
+    <circle r="14" fill="#0a0a0a" stroke="url(#g)" stroke-width="4"/>
+    <rect x="-4" y="8" width="8" height="28" fill="#0a0a0a" stroke="url(#g)" stroke-width="4"/>
+  </g>
+</svg>
