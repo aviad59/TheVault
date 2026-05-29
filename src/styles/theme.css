@@ -28,12 +28,18 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Reserve scrollbar gutter so layout doesn't shift when content grows past viewport */
+  scrollbar-gutter: stable;
+  /* No horizontal scroll, ever. The layout is column-only. */
+  overflow-x: hidden;
+}
+
 html,
 body,
 #root {
   margin: 0;
   padding: 0;
-  height: 100%;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--sans);
@@ -47,7 +53,15 @@ body {
     radial-gradient(800px 400px at 50% 110%, rgba(212, 175, 55, 0.04), transparent 60%),
     var(--bg);
   background-attachment: fixed;
+  /* 100dvh follows the mobile browser's dynamic viewport (URL bar shows/hides
+     without shifting the page); 100vh is the desktop/older-browser fallback. */
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 a {
@@ -92,7 +106,14 @@ textarea {
 .app {
   max-width: 720px;
   margin: 0 auto;
-  padding: 24px 20px 96px;
+  /* Bottom padding clears the FAB (60px tall + 24px offset + breathing room),
+     and grows with the device's safe area so the last card isn't hidden behind
+     the iOS home indicator. Left/right padding respects notched landscape. */
+  padding:
+    24px
+    calc(20px + env(safe-area-inset-right, 0px))
+    calc(112px + env(safe-area-inset-bottom, 0px))
+    calc(20px + env(safe-area-inset-left, 0px));
 }
 
 .brand {
@@ -431,8 +452,14 @@ textarea {
 
 .fab {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  /* Pin to the right edge of the 720px content column on wide screens,
+     fall back to 24px from viewport on narrow screens. Also respects
+     iOS/Android safe areas (notches, gesture bars). */
+  right: max(
+    calc(24px + env(safe-area-inset-right, 0px)),
+    calc(50vw - 720px / 2 + 24px)
+  );
+  bottom: max(24px, calc(24px + env(safe-area-inset-bottom, 0px)));
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -450,6 +477,8 @@ textarea {
     0 0 30px var(--gold-glow);
   transition: transform 160ms ease, box-shadow 200ms ease;
   z-index: 5;
+  /* Prevent iOS tap highlight square */
+  -webkit-tap-highlight-color: transparent;
 }
 
 .fab:hover {
