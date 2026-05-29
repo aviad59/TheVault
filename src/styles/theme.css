@@ -548,3 +548,8 @@ textarea {
 .link-btn.muted:hover {
   color: var(--gold-1);
 }
+
+.google-btn {
+  text-decoration: none;
+  gap: 12px;
+}

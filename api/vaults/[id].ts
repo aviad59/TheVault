@@ -2,6 +2,20 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db, type VaultRow } from '../_lib/db.js';
 import { ensureSchema } from '../_lib/migrate.js';
 import { requireUser } from '../_lib/auth.js';
+import { unsealJSON } from '../_lib/crypto.js';
+
+interface SerializedVault {
+  id: string;
+  user_id: string;
+  title: string;
+  body: string;
+  created_at: number;
+  unlock_at: number;
+  opened_at: number | null;
+  postponed: boolean;
+  notify_days_before: number;
+  decryption_failed?: true;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -91,16 +105,23 @@ async function fetchVault(id: string, userId: string): Promise<VaultRow | null> 
   return rows[0] ?? null;
 }
 
-function serialize(r: VaultRow) {
-  return {
+function serialize(r: VaultRow): SerializedVault {
+  const meta = {
     id: r.id,
     user_id: r.user_id,
-    ciphertext: r.ciphertext,
-    iv: r.iv,
     created_at: Number(r.created_at),
     unlock_at: Number(r.unlock_at),
     opened_at: r.opened_at == null ? null : Number(r.opened_at),
     postponed: !!r.postponed,
     notify_days_before: Number(r.notify_days_before),
   };
+  try {
+    const plain = unsealJSON<{ title: string; body: string }>({
+      ciphertext: r.ciphertext,
+      iv: r.iv,
+    });
+    return { ...meta, title: plain.title, body: plain.body };
+  } catch {
+    return { ...meta, title: '(unreadable)', body: '', decryption_failed: true };
+  }
 }

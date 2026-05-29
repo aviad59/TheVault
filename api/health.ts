@@ -6,6 +6,12 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
   const checks: Record<string, unknown> = {};
   checks.has_TURSO_DATABASE_URL = !!process.env.TURSO_DATABASE_URL;
   checks.has_TURSO_AUTH_TOKEN = !!process.env.TURSO_AUTH_TOKEN;
+  checks.has_GOOGLE_CLIENT_ID = !!process.env.GOOGLE_CLIENT_ID;
+  checks.has_GOOGLE_CLIENT_SECRET = !!process.env.GOOGLE_CLIENT_SECRET;
+  checks.has_MASTER_KEY = !!process.env.MASTER_KEY;
+  checks.master_key_bytes = process.env.MASTER_KEY
+    ? Buffer.from(process.env.MASTER_KEY, 'base64').length
+    : 0;
   checks.url_scheme = process.env.TURSO_DATABASE_URL?.split(':')[0] ?? null;
 
   try {

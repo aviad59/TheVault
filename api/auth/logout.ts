@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ensureSchema } from '../_lib/migrate.js';
 import { deleteSession } from '../_lib/auth.js';
+import { COOKIE_NAMES, clearSessionCookie, parseCookies } from '../_lib/cookies.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -11,12 +12,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     await ensureSchema();
-
-    const auth = req.headers.authorization ?? '';
-    const m = /^Bearer\s+(.+)$/i.exec(auth);
-    if (m) {
-      await deleteSession(m[1].trim());
-    }
+    const cookies = parseCookies(req);
+    const token = cookies[COOKIE_NAMES.session];
+    if (token) await deleteSession(token);
+    clearSessionCookie(res);
     res.status(204).end();
   } catch (err) {
     console.error('[api/auth/logout] failed', err);

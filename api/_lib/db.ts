@@ -13,9 +13,10 @@ export function db(): Client {
 
 export interface UserRow {
   id: string;
+  google_sub: string;
   email: string;
-  pwd_hash: string;
-  enc_salt: string;
+  name: string | null;
+  picture_url: string | null;
   created_at: number;
 }
 

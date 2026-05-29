@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ensureSchema } from '../_lib/migrate.js';
-import { requireUser } from '../_lib/auth.js';
+import { loadUserFromRequest, publicUser } from '../_lib/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -11,15 +11,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     await ensureSchema();
-    const user = await requireUser(req, res);
-    if (!user) return;
-
-    res.status(200).json({
-      id: user.id,
-      email: user.email,
-      enc_salt: user.enc_salt,
-      created_at: Number(user.created_at),
-    });
+    const user = await loadUserFromRequest(req);
+    if (!user) {
+      res.status(401).json({ user: null });
+      return;
+    }
+    res.status(200).json({ user: publicUser(user) });
   } catch (err) {
     console.error('[api/auth/me] failed', err);
     res.status(500).json({

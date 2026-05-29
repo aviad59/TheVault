@@ -2,99 +2,103 @@
 
 A prestigious PWA for sealing questions, worries, and hopes — and delivering them to your future self at a chosen moment.
 
-Gold-on-black. Sealed-on-write. **End-to-end encrypted: the server never sees your messages.**
+Gold-on-black. Sealed-on-write. Google sign-in. AES-256-GCM at rest.
 
 ## Stack
 
 - **Frontend**: Vite + React + TypeScript, registered as a PWA via `vite-plugin-pwa`
 - **Backend**: Vercel serverless functions in `/api`
 - **Database**: Turso (libSQL) via `@libsql/client`
-- **Auth**: email + password, sessions stored in DB, Bearer token in `Authorization` header. Passwords hashed with Node's built-in `scrypt`.
-- **Encryption**: AES-GCM 256, key derived client-side from your password via PBKDF2(600k iters). The server stores only opaque ciphertext.
+- **Auth**: Google OAuth 2.0 (Authorization Code flow). Sessions stored in DB, gated by an httpOnly `Secure SameSite=Lax` cookie.
+- **Encryption**: AES-256-GCM. Vault `{title, body}` is encrypted server-side with a single `MASTER_KEY` env var before being stored, decrypted on read.
 - **Notifications**: Notification Triggers API where supported (Chromium); falls back to firing on app open
 
-## Security model
+## Security & recovery model
 
-- Your **password is the key**. It is sent to the server only over HTTPS, only for `scrypt` verification, and is never stored or logged.
-- Your **encryption key never leaves the browser**. It's derived from your password + a per-user salt and cached in `sessionStorage` for the duration of a tab. Closing the tab forgets the key (you'll be prompted at `/unlock` next time).
-- The server can see: your email, when each vault was created, when it's scheduled to open, and whether/when you opened it. The server **cannot** see vault titles or bodies.
-- **There is no password reset.** If you forget your password, your vaults stay sealed forever. The signup flow makes you acknowledge this.
+This is **server-side encryption-at-rest**, not end-to-end encryption.
+
+- The server can decrypt every vault while handling a request.
+- A stolen DB dump alone reveals nothing useful — an attacker also needs `MASTER_KEY`.
+- **Recovery story**: you (or anyone with `MASTER_KEY` + DB access) can decrypt all vaults at any time. There's no per-user password to lose.
+- **Lose `MASTER_KEY`** → every vault becomes unrecoverable garbage. Back it up somewhere safe (password manager, sealed envelope, whatever you trust).
+- Rotating `MASTER_KEY` after data exists makes old vaults unreadable; if you ever want to rotate, write a one-time script that reads with old key + re-encrypts with new key.
 
 ## Local setup
 
 ```bash
 npm install
 cp .env.example .env
-# Fill in TURSO_DATABASE_URL and TURSO_AUTH_TOKEN
-npm run db:push      # Creates users, sessions, vaults tables
-                     # WARNING: drops any existing `vaults` table to switch to the encrypted schema
-vercel dev           # Runs frontend + serverless API together on http://localhost:3000
+# Fill in TURSO_*, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, MASTER_KEY.
+# Generate MASTER_KEY:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+npm run db:push      # Drops & recreates users/sessions/vaults
+vercel dev           # http://localhost:3000
 ```
 
-If you used the pre-auth version of this app, `npm run db:push` will drop your old plaintext vaults. There's no migration path because the new schema fundamentally encrypts the content with a per-user key that didn't exist before.
+## Google OAuth setup (one-time)
+
+1. <https://console.cloud.google.com> → create or pick a project.
+2. **APIs & Services → OAuth consent screen** → External → fill in app name, support email, developer contact. Add scopes `openid`, `userinfo.email`, `userinfo.profile`. Add yourself as a test user (you can skip publishing for personal use).
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**.
+4. Authorized redirect URIs (add all you'll use):
+   - `https://<your-vercel-domain>/api/auth/google/callback`
+   - `http://localhost:3000/api/auth/google/callback` (for local `vercel dev`)
+5. Copy the client ID and client secret into `.env` (locally) and into Vercel → Settings → Environment Variables (for production).
 
 ## Deploy
 
 1. Push to GitHub.
 2. Import to Vercel.
-3. Set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in Vercel → Settings → Environment Variables.
-4. Run `npm run db:push` locally against the production DB (one-time).
-5. Redeploy if you change env vars.
+3. Set env vars in Vercel → Settings → Environment Variables:
+   - `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+   - `MASTER_KEY`
+   - *(optional)* `APP_BASE_URL` — if your callback host differs from the request host.
+4. Run `npm run db:push` locally pointing at the production Turso DB. This is **destructive** — it drops `users` and `vaults` and recreates them. Existing rows are gone.
+5. Redeploy (Vercel needs a fresh build after env-var changes).
 
 ## API
 
 | Method | Path | Body | Auth | Notes |
 |---|---|---|---|---|
-| POST | `/api/auth/signup` | `{ email, password, enc_salt }` | — | Client generates `enc_salt`. Returns `{ session_token, user }`. |
-| POST | `/api/auth/login` | `{ email, password }` | — | Returns `{ session_token, user }` (including `enc_salt`). |
-| POST | `/api/auth/logout` | — | Bearer | Invalidates session. |
-| GET | `/api/auth/me` | — | Bearer | Returns user record. |
-| GET | `/api/vaults` | — | Bearer | Returns all of the user's vaults (ciphertext + metadata). |
-| POST | `/api/vaults` | `{ ciphertext, iv, unlock_at, notify_days_before }` | Bearer | Client encrypts `{title, body}` before sending. |
-| GET | `/api/vaults/:id` | — | Bearer | |
-| PATCH | `/api/vaults/:id` | `{ action: 'open' \| 'postpone_indefinite' }` | Bearer | |
-| DELETE | `/api/vaults/:id` | — | Bearer | |
-| GET | `/api/health` | — | — | Connectivity + env-var diagnostic. |
+| GET | `/api/auth/google/start` | — | — | Redirects to Google consent. Sets short-lived state cookie. |
+| GET | `/api/auth/google/callback` | — | — | Google redirects here. Exchanges code, upserts user, sets session cookie, redirects to `/`. |
+| GET | `/api/auth/me` | — | cookie | `{ user: User \| null }`. 401 if no session. |
+| POST | `/api/auth/logout` | — | cookie | Clears session cookie + DB row. 204. |
+| GET | `/api/vaults` | — | cookie | Plaintext list (decrypted server-side). |
+| POST | `/api/vaults` | `{ title, body, unlock_at, notify_days_before }` | cookie | Server encrypts before storage. |
+| GET | `/api/vaults/:id` | — | cookie | |
+| PATCH | `/api/vaults/:id` | `{ action: 'open' \| 'postpone_indefinite' }` | cookie | |
+| DELETE | `/api/vaults/:id` | — | cookie | |
+| GET | `/api/health` | — | — | Reports presence of all required env vars + DB connectivity. |
 
-## How the encryption works (concretely)
+## How an unlock event flows
 
-**Sign-up:**
-1. Client generates 16 random bytes → `enc_salt`, base64-encoded.
-2. Client sends `{ email, password, enc_salt }` to `/api/auth/signup`.
-3. Server `scrypt`-hashes the password, stores `users(id, email, pwd_hash, enc_salt)`.
-4. Server creates a session, returns `{ session_token, user }`.
-5. Client derives `master_key = PBKDF2(password, enc_salt, 600_000, SHA-256, 256 bits)` and stores the raw key bytes (base64) in `sessionStorage`. Password is dropped from memory.
-
-**Creating a vault:**
-1. Client generates random 12-byte IV.
-2. Client encrypts `JSON.stringify({title, body})` with `AES-GCM(master_key, IV)`.
-3. Client POSTs `{ ciphertext_b64, iv_b64, unlock_at, notify_days_before }`.
-4. Server stores ciphertext as opaque TEXT.
-
-**Reading a vault:**
-1. Client fetches `{ ciphertext, iv, ... }`.
-2. Client `AES-GCM(master_key, iv).decrypt(ciphertext)` → `{title, body}`.
-3. If the master key is wrong, decryption throws — the UI shows "(unreadable)".
-
-**Login on a new device:**
-1. Same `enc_salt` is returned at login.
-2. Same password + same salt → same master key → vaults decrypt.
+1. Vault `unlock_at` passes.
+2. Notification fires (Chromium: via `TimestampTrigger`; else: next app open).
+3. Tapping the notification opens `/v/:id`.
+4. The route renders a **gate**: "Are you the person this was written for?"
+5. Choose:
+   - **Open the vault** → server marks `opened_at`, decrypts, returns plaintext, UI reveals with a slow blur-in.
+   - **Hold it closed** → server marks `postponed=1`. Vault stays in the list quietly until you choose to open it.
 
 ## File map
 
 ```
 api/
-  _lib/         db client, auth helpers, scrypt, schema migration
-  auth/         signup, login, logout, me
-  vaults/       CRUD (encrypted)
+  _lib/         db client, cookies, auth, AES helpers, Google OAuth, schema migration
+  auth/
+    google/     start.ts, callback.ts (OAuth)
+    me.ts, logout.ts
+  vaults/       CRUD (encrypted server-side)
   health.ts     diagnostic endpoint
 src/
   components/   VaultMark, VaultEmblem
-  lib/          api, auth (React context), crypto, notifications, time
-  routes/       VaultList, NewVault, OpenVault, Login, Signup, Unlock
+  lib/          api (cookie-credentialed fetch), auth (React context), notifications, time
+  routes/       VaultList, NewVault, OpenVault, Login (Google button only)
   styles/       theme.css
-  sw.ts         service worker (notification click)
-  App.tsx       routes + guards
+  sw.ts         service worker
+  App.tsx       routes + RequireAuth guard
 public/         icon.svg, vault.svg
 scripts/        migrate.ts (npm run db:push)
 ```

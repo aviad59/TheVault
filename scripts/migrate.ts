@@ -12,11 +12,16 @@ const client = createClient({ url, authToken });
 
 await client.batch(
   [
-    `CREATE TABLE IF NOT EXISTS users (
+    // Destructive: this is early development. Wipes users and vaults so the
+    // schema lines up with the current Google-OAuth + server-encryption model.
+    `DROP TABLE IF EXISTS users`,
+    `DROP TABLE IF EXISTS vaults`,
+    `CREATE TABLE users (
       id TEXT PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      pwd_hash TEXT NOT NULL,
-      enc_salt TEXT NOT NULL,
+      google_sub TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL,
+      name TEXT,
+      picture_url TEXT,
       created_at INTEGER NOT NULL
     )`,
     `CREATE TABLE IF NOT EXISTS sessions (
@@ -26,9 +31,7 @@ await client.batch(
       expires_at INTEGER NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
-    // Drop legacy plaintext table if present (early-development hard reset).
-    `DROP TABLE IF EXISTS vaults`,
-    `CREATE TABLE IF NOT EXISTS vaults (
+    `CREATE TABLE vaults (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       ciphertext TEXT NOT NULL,
@@ -44,5 +47,6 @@ await client.batch(
   'write',
 );
 
-console.log('Schema ready (users + sessions + encrypted vaults). Existing plaintext vaults were dropped.');
+console.log('Schema ready (Google-OAuth users + sessions + server-encrypted vaults).');
+console.log('Existing user and vault rows were dropped.');
 process.exit(0);

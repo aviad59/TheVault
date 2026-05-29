@@ -5,13 +5,19 @@ let migrated = false;
 export async function ensureSchema(): Promise<void> {
   if (migrated) return;
   const c = db();
+  // Destructive migration: this app is still in early development and the
+  // user-system + encryption model has changed twice. We drop and recreate
+  // both users and vaults so we never carry stale columns.
   await c.batch(
     [
+      `DROP TABLE IF EXISTS users`,
+      `DROP TABLE IF EXISTS vaults`,
       `CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
-        email TEXT NOT NULL UNIQUE,
-        pwd_hash TEXT NOT NULL,
-        enc_salt TEXT NOT NULL,
+        google_sub TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL,
+        name TEXT,
+        picture_url TEXT,
         created_at INTEGER NOT NULL
       )`,
       `CREATE TABLE IF NOT EXISTS sessions (
@@ -21,8 +27,6 @@ export async function ensureSchema(): Promise<void> {
         expires_at INTEGER NOT NULL
       )`,
       `CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
-      // Drop legacy plaintext table if present (early-development hard reset).
-      `DROP TABLE IF EXISTS vaults`,
       `CREATE TABLE IF NOT EXISTS vaults (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,

@@ -1,71 +1,38 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../lib/auth';
+import { VaultEmblem } from '../components/VaultEmblem';
 
 export function LoginPage() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      await login(email.trim().toLowerCase(), password);
-      navigate('/', { replace: true });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="auth-wrap">
-      <div className="center" style={{ marginBottom: 24 }}>
-        <div className="eyebrow">Welcome back</div>
-        <h1 className="h1">Open the hall.</h1>
+      <div className="center" style={{ marginBottom: 32 }}>
+        <VaultEmblem className="vault-emblem" />
+        <div className="eyebrow">Welcome</div>
+        <h1 className="h1">A private hall, for you alone.</h1>
+        <p className="muted" style={{ maxWidth: 460, margin: '12px auto 0' }}>
+          Sign in to write to your future self.
+        </p>
       </div>
 
-      <form onSubmit={submit} className="card">
-        <div className="form-field">
-          <label className="form-label" htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoFocus
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-
-        {error && <div className="notice warn">{error}</div>}
-
-        <button type="submit" className="btn btn-gold btn-full" style={{ marginTop: 12 }} disabled={busy}>
-          {busy ? 'Turning the key…' : 'Enter'}
-        </button>
-
-        <p className="muted center" style={{ marginTop: 18, fontSize: 13 }}>
-          No account yet? <Link to="/signup">Forge a new one</Link>
+      <div className="card center">
+        <a className="btn btn-gold btn-full google-btn" href="/api/auth/google/start">
+          <GoogleMark />
+          Continue with Google
+        </a>
+        <p className="muted" style={{ marginTop: 18, fontSize: 12, lineHeight: 1.55 }}>
+          By continuing you agree to let The Vault see your email, name, and
+          profile picture — nothing more.
         </p>
-      </form>
+      </div>
     </div>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path
+        fill="#1a1300"
+        d="M43.611 20.083H42V20H24v8h11.303C33.973 32.91 29.371 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c2.85 0 5.473.99 7.546 2.642l5.657-5.657C33.486 5.527 28.97 4 24 4 12.954 4 4 12.954 4 24s8.954 20 20 20c11.045 0 20-8.954 20-20 0-1.341-.138-2.65-.389-3.917z"
+      />
+    </svg>
   );
 }
