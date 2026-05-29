@@ -4,72 +4,81 @@ import { ensureSchema } from '../_lib/migrate.js';
 import { getUserId } from '../_lib/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  await ensureSchema();
-  const userId = getUserId(req, res);
-  if (!userId) return;
+  try {
+    await ensureSchema();
+    const userId = getUserId(req, res);
+    if (!userId) return;
 
-  const id = String(req.query.id ?? '');
-  if (!id) {
-    res.status(400).json({ error: 'id required' });
-    return;
-  }
-
-  if (req.method === 'GET') {
-    const row = await fetchVault(id, userId);
-    if (!row) {
-      res.status(404).json({ error: 'not found' });
-      return;
-    }
-    res.status(200).json(serialize(row));
-    return;
-  }
-
-  if (req.method === 'PATCH') {
-    const action = String((req.body ?? {}).action ?? '');
-    const row = await fetchVault(id, userId);
-    if (!row) {
-      res.status(404).json({ error: 'not found' });
+    const id = String(req.query.id ?? '');
+    if (!id) {
+      res.status(400).json({ error: 'id required' });
       return;
     }
 
-    if (action === 'open') {
-      if (Date.now() < Number(row.unlock_at)) {
-        res.status(403).json({ error: 'still locked' });
+    if (req.method === 'GET') {
+      const row = await fetchVault(id, userId);
+      if (!row) {
+        res.status(404).json({ error: 'not found' });
         return;
       }
-      const now = Date.now();
-      await db().execute({
-        sql: `UPDATE vaults SET opened_at = ? WHERE id = ? AND user_id = ?`,
-        args: [now, id, userId],
-      });
-      res.status(200).json(serialize({ ...row, opened_at: now }));
+      res.status(200).json(serialize(row));
       return;
     }
 
-    if (action === 'postpone_indefinite') {
+    if (req.method === 'PATCH') {
+      const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) ?? {};
+      const action = String(body.action ?? '');
+      const row = await fetchVault(id, userId);
+      if (!row) {
+        res.status(404).json({ error: 'not found' });
+        return;
+      }
+
+      if (action === 'open') {
+        if (Date.now() < Number(row.unlock_at)) {
+          res.status(403).json({ error: 'still locked' });
+          return;
+        }
+        const now = Date.now();
+        await db().execute({
+          sql: `UPDATE vaults SET opened_at = ? WHERE id = ? AND user_id = ?`,
+          args: [now, id, userId],
+        });
+        res.status(200).json(serialize({ ...row, opened_at: now }));
+        return;
+      }
+
+      if (action === 'postpone_indefinite') {
+        await db().execute({
+          sql: `UPDATE vaults SET postponed = 1 WHERE id = ? AND user_id = ?`,
+          args: [id, userId],
+        });
+        res.status(200).json(serialize({ ...row, postponed: 1 }));
+        return;
+      }
+
+      res.status(400).json({ error: 'unknown action' });
+      return;
+    }
+
+    if (req.method === 'DELETE') {
       await db().execute({
-        sql: `UPDATE vaults SET postponed = 1 WHERE id = ? AND user_id = ?`,
+        sql: `DELETE FROM vaults WHERE id = ? AND user_id = ?`,
         args: [id, userId],
       });
-      res.status(200).json(serialize({ ...row, postponed: 1 }));
+      res.status(204).end();
       return;
     }
 
-    res.status(400).json({ error: 'unknown action' });
-    return;
-  }
-
-  if (req.method === 'DELETE') {
-    await db().execute({
-      sql: `DELETE FROM vaults WHERE id = ? AND user_id = ?`,
-      args: [id, userId],
+    res.setHeader('Allow', 'GET, PATCH, DELETE');
+    res.status(405).json({ error: 'method not allowed' });
+  } catch (err) {
+    console.error('[api/vaults/:id] failed', err);
+    res.status(500).json({
+      error: err instanceof Error ? err.message : String(err),
+      where: 'api/vaults/:id',
     });
-    res.status(204).end();
-    return;
   }
-
-  res.setHeader('Allow', 'GET, PATCH, DELETE');
-  res.status(405).json({ error: 'method not allowed' });
 }
 
 async function fetchVault(id: string, userId: string): Promise<VaultRow | null> {
