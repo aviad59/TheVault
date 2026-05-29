@@ -1,25 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { db, type VaultRow } from '../_lib/db.js';
+import { db, rid, type VaultRow } from '../_lib/db.js';
 import { ensureSchema } from '../_lib/migrate.js';
-import { getUserId } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
 
-function rid(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
+const MAX_CIPHERTEXT_B64 = 64 * 1024; // ~48KB of plaintext after base64
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     await ensureSchema();
-    const userId = getUserId(req, res);
-    if (!userId) return;
+    const user = await requireUser(req, res);
+    if (!user) return;
 
     if (req.method === 'GET') {
       const result = await db().execute({
-        sql: `SELECT id, user_id, title, body, created_at, unlock_at, opened_at, postponed, notify_days_before
+        sql: `SELECT id, user_id, ciphertext, iv, created_at, unlock_at, opened_at, postponed, notify_days_before
               FROM vaults WHERE user_id = ? ORDER BY unlock_at ASC`,
-        args: [userId],
+        args: [user.id],
       });
       const rows = result.rows as unknown as VaultRow[];
       res.status(200).json(rows.map(serialize));
@@ -28,19 +24,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'POST') {
       const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) ?? {};
-      const title = typeof body.title === 'string' ? body.title.trim() : '';
-      const message = typeof body.body === 'string' ? body.body.trim() : '';
+      const ciphertext = typeof body.ciphertext === 'string' ? body.ciphertext : '';
+      const iv = typeof body.iv === 'string' ? body.iv : '';
       const unlockAt = Number(body.unlock_at);
       const notifyDaysBefore = Number.isFinite(Number(body.notify_days_before))
         ? Math.max(0, Math.min(60, Math.floor(Number(body.notify_days_before))))
         : 7;
 
-      if (!title || title.length > 200) {
-        res.status(400).json({ error: 'title required, max 200 chars' });
+      if (!ciphertext || ciphertext.length > MAX_CIPHERTEXT_B64) {
+        res.status(400).json({ error: 'ciphertext required, max 64KB base64' });
         return;
       }
-      if (!message || message.length > 20000) {
-        res.status(400).json({ error: 'body required, max 20000 chars' });
+      if (!iv || iv.length > 32) {
+        res.status(400).json({ error: 'iv required' });
         return;
       }
       if (!Number.isFinite(unlockAt) || unlockAt <= Date.now()) {
@@ -51,16 +47,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const id = rid();
       const now = Date.now();
       await db().execute({
-        sql: `INSERT INTO vaults (id, user_id, title, body, created_at, unlock_at, opened_at, postponed, notify_days_before)
+        sql: `INSERT INTO vaults (id, user_id, ciphertext, iv, created_at, unlock_at, opened_at, postponed, notify_days_before)
               VALUES (?, ?, ?, ?, ?, ?, NULL, 0, ?)`,
-        args: [id, userId, title, message, now, unlockAt, notifyDaysBefore],
+        args: [id, user.id, ciphertext, iv, now, unlockAt, notifyDaysBefore],
       });
 
       res.status(201).json({
         id,
-        user_id: userId,
-        title,
-        body: message,
+        user_id: user.id,
+        ciphertext,
+        iv,
         created_at: now,
         unlock_at: unlockAt,
         opened_at: null,
@@ -85,8 +81,8 @@ function serialize(r: VaultRow) {
   return {
     id: r.id,
     user_id: r.user_id,
-    title: r.title,
-    body: r.body,
+    ciphertext: r.ciphertext,
+    iv: r.iv,
     created_at: Number(r.created_at),
     unlock_at: Number(r.unlock_at),
     opened_at: r.opened_at == null ? null : Number(r.opened_at),

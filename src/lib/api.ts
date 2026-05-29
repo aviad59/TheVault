@@ -1,13 +1,35 @@
-import { getUserId } from './user';
-import type { Vault } from '../types';
+import { getToken } from './auth';
+
+export interface VaultRecord {
+  id: string;
+  user_id: string;
+  ciphertext: string;
+  iv: string;
+  created_at: number;
+  unlock_at: number;
+  opened_at: number | null;
+  postponed: boolean;
+  notify_days_before: number;
+}
 
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set('x-user-id', getUserId());
+  const token = getToken();
+  if (token) headers.set('authorization', `Bearer ${token}`);
   if (init.body && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
   }
   const res = await fetch(path, { ...init, headers });
+  if (res.status === 401) {
+    // Session is gone — wipe and bounce to login.
+    localStorage.removeItem('vault.session_token');
+    localStorage.removeItem('vault.user');
+    sessionStorage.removeItem('vault.mk');
+    if (location.pathname !== '/login' && location.pathname !== '/signup') {
+      location.replace('/login');
+    }
+    throw new Error('not authenticated');
+  }
   if (!res.ok) {
     let detail = '';
     try {
@@ -22,31 +44,31 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  list(): Promise<Vault[]> {
-    return req<Vault[]>('/api/vaults');
+  list(): Promise<VaultRecord[]> {
+    return req<VaultRecord[]>('/api/vaults');
   },
-  get(id: string): Promise<Vault> {
-    return req<Vault>(`/api/vaults/${encodeURIComponent(id)}`);
+  get(id: string): Promise<VaultRecord> {
+    return req<VaultRecord>(`/api/vaults/${encodeURIComponent(id)}`);
   },
   create(input: {
-    title: string;
-    body: string;
+    ciphertext: string;
+    iv: string;
     unlock_at: number;
     notify_days_before: number;
-  }): Promise<Vault> {
-    return req<Vault>('/api/vaults', {
+  }): Promise<VaultRecord> {
+    return req<VaultRecord>('/api/vaults', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
-  open(id: string): Promise<Vault> {
-    return req<Vault>(`/api/vaults/${encodeURIComponent(id)}`, {
+  open(id: string): Promise<VaultRecord> {
+    return req<VaultRecord>(`/api/vaults/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify({ action: 'open' }),
     });
   },
-  postpone(id: string): Promise<Vault> {
-    return req<Vault>(`/api/vaults/${encodeURIComponent(id)}`, {
+  postpone(id: string): Promise<VaultRecord> {
+    return req<VaultRecord>(`/api/vaults/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify({ action: 'postpone_indefinite' }),
     });

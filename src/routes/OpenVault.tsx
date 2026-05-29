@@ -5,38 +5,51 @@ import { type Vault, statusOf } from '../types';
 import { formatAbsolute, formatRelative } from '../lib/time';
 import { VaultEmblem } from '../components/VaultEmblem';
 import { cancelForVault } from '../lib/notifications';
+import { decryptJSON } from '../lib/crypto';
+import { useAuth } from '../lib/auth';
 
 type Stage = 'loading' | 'sealed' | 'gate' | 'revealed' | 'postponed' | 'error';
 
 export function OpenVaultPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const { key } = useAuth();
   const [vault, setVault] = useState<Vault | null>(null);
   const [stage, setStage] = useState<Stage>('loading');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!key) return;
     let alive = true;
-    api
-      .get(id)
-      .then((v) => {
+
+    (async () => {
+      try {
+        const record = await api.get(id);
+        const plain = await decryptJSON<{ title: string; body: string }>(key, {
+          ciphertext: record.ciphertext,
+          iv: record.iv,
+        }).catch(() => null);
         if (!alive) return;
+        const v: Vault = plain
+          ? { ...record, title: plain.title, body: plain.body }
+          : { ...record, title: '(unreadable)', body: '', decryption_failed: true };
         setVault(v);
         const s = statusOf(v);
         if (s === 'locked') setStage('sealed');
         else if (s === 'opened') setStage('revealed');
         else if (s === 'postponed') setStage('postponed');
         else setStage('gate');
-      })
-      .catch((e) => {
+      } catch (e: unknown) {
         if (!alive) return;
-        setError(e.message ?? String(e));
+        setError(e instanceof Error ? e.message : String(e));
         setStage('error');
-      });
+      }
+    })();
+
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [id, key]);
 
   if (stage === 'loading') {
     return <div className="muted center" style={{ padding: 48 }}>Approaching the vault…</div>;
@@ -56,19 +69,25 @@ export function OpenVaultPage() {
   return (
     <>
       <button className="back-link" onClick={() => navigate('/')}>← Back</button>
+      {vault.decryption_failed && (
+        <div className="notice warn">
+          This vault could not be decrypted with your current key. The data is intact on the server
+          but unreadable without the password it was sealed with.
+        </div>
+      )}
       {stage === 'sealed' && <SealedView vault={vault} onDelete={() => navigate('/')} />}
       {stage === 'gate' && (
         <GateView
           vault={vault}
           onConfirm={async () => {
-            const opened = await api.open(vault.id);
+            const updated = await api.open(vault.id);
             await cancelForVault(vault.id);
-            setVault(opened);
+            setVault({ ...updated, title: vault.title, body: vault.body });
             setStage('revealed');
           }}
           onPostpone={async () => {
-            const postponed = await api.postpone(vault.id);
-            setVault(postponed);
+            const updated = await api.postpone(vault.id);
+            setVault({ ...updated, title: vault.title, body: vault.body });
             setStage('postponed');
           }}
         />

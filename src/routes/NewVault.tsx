@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { fromDatetimeLocalValue, toDatetimeLocalValue } from '../lib/time';
 import { ensurePermission, scheduleForVault, supportsScheduling } from '../lib/notifications';
+import { encryptJSON } from '../lib/crypto';
+import { useAuth } from '../lib/auth';
 
 const DAY = 24 * 60 * 60 * 1000;
 
 export function NewVaultPage() {
   const navigate = useNavigate();
+  const { key } = useAuth();
   const defaultDate = useMemo(() => toDatetimeLocalValue(Date.now() + 60 * DAY), []);
 
   const [title, setTitle] = useState('');
@@ -26,18 +29,24 @@ export function NewVaultPage() {
     if (!title.trim()) return setError('A vault needs a name.');
     if (!body.trim()) return setError('Write something to entrust.');
     if (!isFuture) return setError('Choose a moment at least a minute from now.');
+    if (!key) return setError('Your encryption key is not available. Try signing in again.');
 
     setBusy(true);
     try {
       await ensurePermission();
-      const v = await api.create({
-        title: title.trim(),
-        body: body.trim(),
+      const payload = await encryptJSON(key, { title: title.trim(), body: body.trim() });
+      const record = await api.create({
+        ciphertext: payload.ciphertext,
+        iv: payload.iv,
         unlock_at: unlockAt,
         notify_days_before: days,
       });
       try {
-        await scheduleForVault(v);
+        await scheduleForVault({
+          ...record,
+          title: title.trim(),
+          body: body.trim(),
+        });
       } catch {
         // best effort — silent
       }
@@ -84,7 +93,7 @@ export function NewVaultPage() {
             placeholder="The worry, the question, the hope. Write it plainly. Your future self will know what to do with it."
             maxLength={20000}
           />
-          <div className="form-help">Sealed at save — cannot be edited later.</div>
+          <div className="form-help">Sealed and encrypted at save — even we cannot read it.</div>
         </div>
 
         <div className="form-grid">

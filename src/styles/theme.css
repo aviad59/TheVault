@@ -512,3 +512,39 @@ textarea {
 .stack-lg > * + * { margin-top: 28px; }
 
 .center { text-align: center; }
+
+/* ─── Auth / login pages ─── */
+
+.auth-wrap {
+  max-width: 460px;
+  margin: 24px auto 0;
+}
+
+.link-btn {
+  background: transparent;
+  border: none;
+  color: var(--gold-1);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(245, 217, 122, 0.4);
+}
+
+.link-btn:hover {
+  text-decoration-color: var(--gold-1);
+}
+
+.link-btn.muted {
+  color: var(--ink-mute);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.link-btn.muted:hover {
+  color: var(--gold-1);
+}

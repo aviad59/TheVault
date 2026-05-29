@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api, type VaultRecord } from '../lib/api';
 import { type Vault, statusOf } from '../types';
 import { formatRelative, formatAbsolute } from '../lib/time';
 import { ensurePermission, fireDuePendingNotifications } from '../lib/notifications';
+import { decryptJSON } from '../lib/crypto';
+import { useAuth } from '../lib/auth';
 
 const STATUS_LABEL: Record<string, string> = {
   locked: 'Sealed',
@@ -13,21 +15,33 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function VaultListPage() {
+  const { key } = useAuth();
   const [vaults, setVaults] = useState<Vault[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsPermission, setNeedsPermission] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!key) return;
     let alive = true;
-    api
-      .list()
-      .then((list) => {
+
+    (async () => {
+      try {
+        const records = await api.list();
+        const decrypted = await Promise.all(records.map((r) => decryptOne(r, key)));
         if (!alive) return;
-        setVaults(list);
-        fireDuePendingNotifications(list).catch(() => undefined);
-      })
-      .catch((e) => alive && setError(String(e.message ?? e)));
+        setVaults(decrypted);
+
+        const forNotify = decrypted.map((d) => ({
+          ...d,
+          title: d.decryption_failed ? 'A vault' : d.title,
+        }));
+        fireDuePendingNotifications(forNotify).catch(() => undefined);
+      } catch (e: unknown) {
+        if (!alive) return;
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
 
     if ('Notification' in window && Notification.permission === 'default') {
       setNeedsPermission(true);
@@ -35,7 +49,7 @@ export function VaultListPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [key]);
 
   const requestPermission = async () => {
     const result = await ensurePermission();
@@ -52,7 +66,7 @@ export function VaultListPage() {
   }
 
   if (vaults === null) {
-    return <div className="muted center" style={{ padding: 48 }}>Opening the gallery…</div>;
+    return <div className="muted center" style={{ padding: 48 }}>Unsealing the gallery…</div>;
   }
 
   return (
@@ -101,6 +115,18 @@ export function VaultListPage() {
       </button>
     </>
   );
+}
+
+async function decryptOne(r: VaultRecord, key: CryptoKey): Promise<Vault> {
+  try {
+    const plain = await decryptJSON<{ title: string; body: string }>(key, {
+      ciphertext: r.ciphertext,
+      iv: r.iv,
+    });
+    return { ...r, title: plain.title, body: plain.body };
+  } catch {
+    return { ...r, title: '(unreadable)', body: '', decryption_failed: true };
+  }
 }
 
 function VaultRow({ vault }: { vault: Vault }) {

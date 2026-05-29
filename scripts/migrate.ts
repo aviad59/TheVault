@@ -12,11 +12,27 @@ const client = createClient({ url, authToken });
 
 await client.batch(
   [
+    `CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      pwd_hash TEXT NOT NULL,
+      enc_salt TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
+    // Drop legacy plaintext table if present (early-development hard reset).
+    `DROP TABLE IF EXISTS vaults`,
     `CREATE TABLE IF NOT EXISTS vaults (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      body TEXT NOT NULL,
+      ciphertext TEXT NOT NULL,
+      iv TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       unlock_at INTEGER NOT NULL,
       opened_at INTEGER,
@@ -28,5 +44,5 @@ await client.batch(
   'write',
 );
 
-console.log('Schema ready.');
+console.log('Schema ready (users + sessions + encrypted vaults). Existing plaintext vaults were dropped.');
 process.exit(0);

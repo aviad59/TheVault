@@ -11,14 +11,35 @@ export function db(): Client {
   return client;
 }
 
+export interface UserRow {
+  id: string;
+  email: string;
+  pwd_hash: string;
+  enc_salt: string;
+  created_at: number;
+}
+
+export interface SessionRow {
+  token: string;
+  user_id: string;
+  created_at: number;
+  expires_at: number;
+}
+
 export interface VaultRow {
   id: string;
   user_id: string;
-  title: string;
-  body: string;
+  ciphertext: string;
+  iv: string;
   created_at: number;
   unlock_at: number;
   opened_at: number | null;
   postponed: number;
   notify_days_before: number;
+}
+
+export function rid(byteLen = 16): string {
+  const bytes = new Uint8Array(byteLen);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
