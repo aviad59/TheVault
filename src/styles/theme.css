@@ -29,10 +29,16 @@
 }
 
 html {
-  /* Reserve scrollbar gutter so layout doesn't shift when content grows past viewport */
-  scrollbar-gutter: stable;
   /* No horizontal scroll, ever. The layout is column-only. */
   overflow-x: hidden;
+}
+
+/* Reserve scrollbar gutter only on classic (desktop) scrollbars, where
+   the appearing/disappearing scrollbar shifts the layout. On phones the
+   scrollbar is overlay and this would push the FAB inwards from the
+   real corner. `min-width: 760px` is "wider than the content column". */
+@media (min-width: 760px) {
+  html { scrollbar-gutter: stable; }
 }
 
 html,
@@ -452,14 +458,11 @@ textarea {
 
 .fab {
   position: fixed;
-  /* Pin to the right edge of the 720px content column on wide screens,
-     fall back to 24px from viewport on narrow screens. Also respects
-     iOS/Android safe areas (notches, gesture bars). */
-  right: max(
-    calc(24px + env(safe-area-inset-right, 0px)),
-    calc(50vw - 720px / 2 + 24px)
-  );
-  bottom: max(24px, calc(24px + env(safe-area-inset-bottom, 0px)));
+  /* Mobile default: sit in the actual bottom-right corner of the viewport,
+     just lifted clear of the iOS home indicator / Android gesture bar.
+     env(...) returns 0 on platforms without insets. */
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -477,8 +480,18 @@ textarea {
     0 0 30px var(--gold-glow);
   transition: transform 160ms ease, box-shadow 200ms ease;
   z-index: 5;
-  /* Prevent iOS tap highlight square */
+  /* Prevent iOS tap-highlight square and tap delay */
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* On wide screens, pin to the right edge of the centered content column
+   so the FAB stays near the cards instead of floating in dead whitespace. */
+@media (min-width: 760px) {
+  .fab {
+    right: max(24px, calc(50vw - 720px / 2 + 24px));
+    bottom: max(24px, calc(24px + env(safe-area-inset-bottom, 0px)));
+  }
 }
 
 .fab:hover {
@@ -581,4 +594,62 @@ textarea {
 .google-btn {
   text-decoration: none;
   gap: 12px;
+}
+
+/* ─── Preset chips (open-time presets) ─── */
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.preset-chip {
+  font-family: inherit;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 200ms ease, box-shadow 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.preset-chip:hover {
+  border-color: var(--gold-3);
+  color: var(--gold-1);
+}
+
+.preset-chip.active {
+  background: linear-gradient(180deg, var(--gold-1), var(--gold-2));
+  border-color: var(--gold-3);
+  color: #1a1300;
+  font-weight: 500;
+  box-shadow: 0 0 18px var(--gold-glow);
+}
+
+/* ─── Mobile-only tuning ─── */
+
+@media (max-width: 480px) {
+  .h1 { font-size: 28px; }
+  .h2 { font-size: 21px; }
+  .card-title { font-size: 19px; }
+  .brand-name { font-size: 22px; letter-spacing: 0.16em; }
+  .brand-mark { width: 24px; height: 24px; }
+  .vault-emblem { width: 80px; height: 80px; margin: 8px 0 22px; }
+  .vault-reveal { font-size: 18px; }
+  .card { padding: 18px; }
+  .auth-wrap { padding: 0 4px; }
+  /* Slightly smaller FAB so it doesn't dominate small screens */
+  .fab {
+    width: 56px;
+    height: 56px;
+    font-size: 26px;
+  }
 }

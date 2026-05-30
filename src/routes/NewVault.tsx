@@ -6,19 +6,51 @@ import { ensurePermission, scheduleForVault, supportsScheduling } from '../lib/n
 
 const DAY = 24 * 60 * 60 * 1000;
 
+interface Preset {
+  days: number;
+  label: string;
+}
+
+const PRESETS: Preset[] = [
+  { days: 7, label: '1 week' },
+  { days: 30, label: '1 month' },
+  { days: 60, label: '2 months' },
+  { days: 180, label: '6 months' },
+  { days: 365, label: '1 year' },
+];
+
+const DEFAULT_PRESET_DAYS = 60;
+
 export function NewVaultPage() {
   const navigate = useNavigate();
-  const defaultDate = useMemo(() => toDatetimeLocalValue(Date.now() + 60 * DAY), []);
+  const initial = useMemo(
+    () => ({
+      when: toDatetimeLocalValue(Date.now() + DEFAULT_PRESET_DAYS * DAY),
+      preset: DEFAULT_PRESET_DAYS as number | null,
+    }),
+    [],
+  );
 
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [when, setWhen] = useState(defaultDate);
+  const [when, setWhen] = useState(initial.when);
+  const [activePreset, setActivePreset] = useState<number | null>(initial.preset);
   const [days, setDays] = useState(7);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const unlockAt = fromDatetimeLocalValue(when);
   const isFuture = Number.isFinite(unlockAt) && unlockAt > Date.now() + 60_000;
+
+  const applyPreset = (presetDays: number) => {
+    setWhen(toDatetimeLocalValue(Date.now() + presetDays * DAY));
+    setActivePreset(presetDays);
+  };
+
+  const handleDateChange = (value: string) => {
+    setWhen(value);
+    setActivePreset(null);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,27 +119,42 @@ export function NewVaultPage() {
           <div className="form-help">Sealed at save — cannot be edited later.</div>
         </div>
 
-        <div className="form-grid">
-          <div className="form-field">
-            <label className="form-label" htmlFor="when">Open at</label>
-            <input
-              id="when"
-              type="datetime-local"
-              value={when}
-              onChange={(e) => setWhen(e.target.value)}
-            />
+        <div className="form-field">
+          <label className="form-label" htmlFor="when">When should it open?</label>
+          <div className="preset-row" role="group" aria-label="Open-time presets">
+            {PRESETS.map((p) => (
+              <button
+                key={p.days}
+                type="button"
+                className={`preset-chip${activePreset === p.days ? ' active' : ''}`}
+                onClick={() => applyPreset(p.days)}
+                aria-pressed={activePreset === p.days}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
-          <div className="form-field">
-            <label className="form-label" htmlFor="days">Remind me, days before</label>
-            <input
-              id="days"
-              type="number"
-              min={0}
-              max={60}
-              value={days}
-              onChange={(e) => setDays(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
-            />
+          <input
+            id="when"
+            type="datetime-local"
+            value={when}
+            onChange={(e) => handleDateChange(e.target.value)}
+          />
+          <div className="form-help">
+            Pick a preset above, or set an exact moment here.
           </div>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="days">Remind me, days before</label>
+          <input
+            id="days"
+            type="number"
+            min={0}
+            max={60}
+            value={days}
+            onChange={(e) => setDays(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
+          />
         </div>
 
         {!supportsScheduling() && (
