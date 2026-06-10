@@ -5,13 +5,12 @@ let migrated = false;
 export async function ensureSchema(): Promise<void> {
   if (migrated) return;
   const c = db();
-  // Destructive migration: this app is still in early development and the
-  // user-system + encryption model has changed twice. We drop and recreate
-  // both users and vaults so we never carry stale columns.
+  // Idempotent, non-destructive: this runs on every request (each API route
+  // is its own serverless instance with separate module state, so a
+  // drop/recreate here would wipe users between requests). For one-off
+  // schema resets during early development, use `npm run db:push` instead.
   await c.batch(
     [
-      `DROP TABLE IF EXISTS users`,
-      `DROP TABLE IF EXISTS vaults`,
       `CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         google_sub TEXT NOT NULL UNIQUE,
