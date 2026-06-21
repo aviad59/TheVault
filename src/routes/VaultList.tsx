@@ -83,22 +83,24 @@ export function VaultListPage() {
           </button>
         </div>
       ) : (
-        <div className="list">
-          {vaults.map((v) => (
-            <Link key={v.id} to={`/v/${v.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-              <VaultRow vault={v} />
-            </Link>
-          ))}
-        </div>
-      )}
+        <>
+          <div className="list">
+            {vaults.map((v) => (
+              <Link key={v.id} to={`/v/${v.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <VaultRow vault={v} />
+              </Link>
+            ))}
+          </div>
 
-      <button
-        className="fab"
-        aria-label="New vault"
-        onClick={() => navigate('/new')}
-      >
-        +
-      </button>
+          <button
+            className="fab"
+            aria-label="New vault"
+            onClick={() => navigate('/new')}
+          >
+            +
+          </button>
+        </>
+      )}
     </>
   );
 }
