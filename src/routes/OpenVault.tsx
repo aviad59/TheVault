@@ -5,6 +5,7 @@ import { type Vault, statusOf } from '../types';
 import { formatAbsolute, formatRelative } from '../lib/time';
 import { VaultEmblem } from '../components/VaultEmblem';
 import { cancelForVault } from '../lib/notifications';
+import { dirOf } from '../lib/rtl';
 
 type Stage = 'loading' | 'sealed' | 'gate' | 'revealed' | 'postponed' | 'error';
 
@@ -100,7 +101,7 @@ function SealedView({ vault, onDelete }: { vault: Vault; onDelete: () => void })
     <div className="vault-stage">
       <VaultEmblem className="vault-emblem" />
       <div className="eyebrow">Sealed</div>
-      <h1 className="h1">{vault.title}</h1>
+      <h1 className="h1" dir={dirOf(vault.title)}>{vault.title}</h1>
       <p className="muted" style={{ marginTop: 8 }}>
         Opens {formatRelative(vault.unlock_at)} · {formatAbsolute(vault.unlock_at)}
       </p>
@@ -147,7 +148,7 @@ function GateView({
     <div className="vault-stage">
       <VaultEmblem open className="vault-emblem" />
       <div className="eyebrow">The hour has arrived</div>
-      <h1 className="h1">{vault.title}</h1>
+      <h1 className="h1" dir={dirOf(vault.title)}>{vault.title}</h1>
       <p className="muted" style={{ marginTop: 8 }}>
         Sealed {formatRelative(vault.created_at)}
       </p>
@@ -193,7 +194,7 @@ function PostponedView({
     <div className="vault-stage">
       <VaultEmblem className="vault-emblem" />
       <div className="eyebrow">Held back</div>
-      <h1 className="h1">{vault.title}</h1>
+      <h1 className="h1" dir={dirOf(vault.title)}>{vault.title}</h1>
       <p className="muted" style={{ marginTop: 8, maxWidth: 460 }}>
         You chose to keep this one closed. It will wait for you, quietly, until you are ready.
       </p>
@@ -218,12 +219,12 @@ function RevealedView({ vault }: { vault: Vault }) {
     <div className="vault-stage reveal-in">
       <VaultEmblem open className="vault-emblem" />
       <div className="eyebrow">From your past self</div>
-      <h1 className="h1">{vault.title}</h1>
+      <h1 className="h1" dir={dirOf(vault.title)}>{vault.title}</h1>
       <p className="muted" style={{ marginTop: 8 }}>
         Written {formatAbsolute(vault.created_at)}
       </p>
       <div className="divider" />
-      <div className="vault-reveal">{vault.body}</div>
+      <div className="vault-reveal" dir={dirOf(vault.body)}>{vault.body}</div>
       <div className="divider" />
       <p className="muted">
         Opened {formatRelative(vault.opened_at ?? Date.now())}.

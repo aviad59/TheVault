@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { type Vault, statusOf } from '../types';
 import { formatRelative, formatAbsolute } from '../lib/time';
 import { ensurePermission, fireDuePendingNotifications } from '../lib/notifications';
+import { dirOf } from '../lib/rtl';
 
 const STATUS_LABEL: Record<string, string> = {
   locked: 'Sealed',
@@ -121,7 +122,11 @@ function VaultRow({ vault }: { vault: Vault }) {
       <div className="card-row">
         <div style={{ minWidth: 0 }}>
           <div className="eyebrow">{STATUS_LABEL[status]}</div>
-          <h3 className="card-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <h3
+            className="card-title"
+            dir={dirOf(vault.title)}
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
             {vault.title}
           </h3>
           <div className="muted" style={{ marginTop: 8 }}>{subtitle}</div>

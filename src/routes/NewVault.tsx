@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { fromDatetimeLocalValue, toDatetimeLocalValue } from '../lib/time';
 import { ensurePermission, scheduleForVault, supportsScheduling } from '../lib/notifications';
+import { dirOf } from '../lib/rtl';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -103,6 +104,7 @@ export function NewVaultPage() {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. My first weeks at the new job"
             maxLength={200}
+            dir={dirOf(title)}
             autoFocus
           />
         </div>
@@ -115,6 +117,7 @@ export function NewVaultPage() {
             onChange={(e) => setBody(e.target.value)}
             placeholder="The worry, the question, the hope. Write it plainly. Your future self will know what to do with it."
             maxLength={20000}
+            dir={dirOf(body)}
           />
           <div className="form-help">Sealed at save — cannot be edited later.</div>
         </div>
